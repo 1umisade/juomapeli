@@ -23,7 +23,7 @@ const CARDS = [
   { name: "Kuka näin on sanonu?", text: "Sano tunnettu lausahdus: lausujan arvannut pelaaja ei juo. Muut juovat.", image: "kuka.mp4" },
   { name: " ", text: "Anna vasemmalla puolella istuvalle pelaajalle hörppy omaa juomaasi.", image: "imetän.jpg" },
   { name: "Velho",               text: "Kerro jotain mitä et ole tehnyt tänä vuonna. Pelaajat jotka ovat sitä tehneet, juovat.", image: "velho.png" },
-  { name: "Rotutohtori",         text: "Mittaa oikealla ja vasemmalla puolella istuvien istuvien nenät. Isompi nenä juo.", image: "tohtori.png" },
+  { name: "Rotutohtori",         text: "Mittaa oikealla ja vasemmalla puolellasi istuvien nenät. Isompi nenä juo kolme (3) huikkaa.", image: "tohtori.png" },
   { name: "Homo neekeri",         text: "Älä anna vihalle valtaa. Juo jos nauroit.", image: "jani.jpg" },
   { name: "Arvaa kuka?",         text: "Esitä jotakin toista pelaajaa. Ensimmäisenä oikein arvannut ei juo. Muut juovat.", image: "arvaa.png" },
   { name: "Huhhuh pitkä teksti", text: "Lue yksi lause kirjasta sönköttämättä tai juo kolme (3) huikkaa.",         image: "kirja.png" },
