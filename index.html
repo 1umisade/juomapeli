@@ -19,8 +19,9 @@
   /* ---------- Card ---------- */
   #card {
     position: relative;
-    width: min(86vw, 460px);
-    aspect-ratio: 3 / 4;
+    /* 1:1.4 ratio; width capped so the taller card still fits the viewport height */
+    width: min(86vw, 65vh, 460px);
+    aspect-ratio: 1 / 1.4;
     border-radius: 22px;
     background: linear-gradient(160deg, #6d5dfc, #46337e);
     box-shadow: 0 16px 40px rgba(0,0,0,.5);
@@ -28,6 +29,7 @@
     align-items: center; justify-content: center;
     text-align: center;
     padding: 26px;
+    overflow: hidden;
     cursor: pointer;
     transition: transform .12s ease;
   }
@@ -45,6 +47,17 @@
     color: rgba(255,255,255,.55);
   }
 
+  /* sound toggle, shown only on video cards */
+  #sound-btn {
+    position: absolute; top: 10px; left: 12px;
+    width: 40px; height: 40px;
+    border: none; border-radius: 999px;
+    font-size: 18px; line-height: 40px;
+    background: rgba(255,255,255,.22); color: #fff;
+    cursor: pointer; padding: 0;
+  }
+  #sound-btn:active { transform: scale(.94); }
+
   /* card name on top of the image — 2x font */
   #card-name {
     font-size: 50px;
@@ -55,14 +68,21 @@
 
   /* image area */
   #card-img {
-    font-size: 190px;
-    line-height: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
     margin-bottom: 14px;
-    width: 95%;
-    height: 48%;
     display: flex; align-items: center; justify-content: center;
   }
-  #card-img img { max-width: 100%; max-height: 100%; border-radius: 12px; }
+  /* media fits the available area, keeps aspect ratio (no stretch, no card growth) */
+  #card-img img,
+  #card-img video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 12px;
+    display: block;
+  }
   #card-img:empty { display: none; }
 
   /* placeholder shown until a real image exists */
@@ -80,6 +100,38 @@
 
   #card-text { font-size: 22px; font-weight: 600; line-height: 1.3; }
   #card-text:empty { display: none; }
+
+  /* drawing canvas (Maalari card) */
+  #card-img canvas {
+    width: 100%; height: 260px;
+    background: #fff;
+    border-radius: 12px;
+    touch-action: none;
+    cursor: crosshair;
+  }
+
+  /* Maalari (drawing) card: push everything to the edges, maximize canvas */
+  #card.drawing { padding: 12px; justify-content: flex-start; }
+  /* no zoom: don't scale on press, don't run the flip/zoom appear animation */
+  #card.drawing:active { transform: none; }
+  #card.drawing.flip { animation: none; }
+  #card.drawing #card-name { margin-bottom: 8px; }
+  #card.drawing #card-text { margin: 0 0 8px; }
+  #card.drawing #card-img { flex: 1 1 auto; min-height: 0; margin: 0 0 8px; }
+  #card.drawing #card-img canvas { width: 100%; height: 100%; }
+
+  /* action buttons shown only on the draw card */
+  #card-actions {
+    display: flex; gap: 10px; margin-top: 14px;
+  }
+  .mini {
+    border: none; border-radius: 10px;
+    padding: 10px 18px; font-size: 16px; font-weight: 700;
+    cursor: pointer;
+  }
+  #clearBtn { background: rgba(255,255,255,.22); color: #fff; }
+  #nextBtn  { background: #ffd24d; color: #1d1a2b; }
+  .mini:active { transform: scale(.96); }
 
   /* ---------- Start screen ---------- */
   #setup {
@@ -106,14 +158,21 @@
   <!-- The card -->
   <div id="card">
     <div id="card-count"></div>
+    <button id="sound-btn" class="hidden">🔇</button>
     <div id="card-name">Napauta korttia</div>
     <div id="card-img"></div>
     <div id="card-text"></div>
+    <div id="card-actions" class="hidden">
+      <button id="clearBtn" class="mini">Tyhjennä</button>
+      <button id="nextBtn" class="mini">Seuraava kortti</button>
+    </div>
   </div>
 
 <script src="cards.js"></script>
 <script>
   let lastCard = -1;
+  let drawingMode = false;   // true while the Maalari (draw) card is showing
+  let currentVideo = null;   // <video> on the current card, if any
   const played = new Set();
 
   const $ = (id) => document.getElementById(id);
@@ -126,8 +185,32 @@
 
   $("card").addEventListener("click", () => {
     if (!$("setup").classList.contains("hidden")) return;
+    if (drawingMode) return;   // on the draw card, advance only via "Seuraava kortti"
     drawCard();
   });
+
+  // Buttons used by the Maalari draw card
+  $("clearBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearCanvas();
+  });
+  $("nextBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    drawCard();
+  });
+
+  // Sound toggle for video cards
+  $("sound-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!currentVideo) return;
+    currentVideo.muted = !currentVideo.muted;
+    if (!currentVideo.muted) currentVideo.play().catch(() => {});
+    updateSoundIcon();
+  });
+
+  function updateSoundIcon() {
+    $("sound-btn").textContent = (currentVideo && !currentVideo.muted) ? "🔊" : "🔇";
+  }
 
   function drawCard() {
     if (!CARDS || CARDS.length === 0) {
@@ -151,25 +234,121 @@
 
   function showCard(card) {
     const imgEl = $("card-img");
-    const img = (card.image || "").trim();
-    const isFile = /^(https?:\/\/|images\/|\.\/|\/)|\.(png|jpe?g|gif|webp|svg)$/i.test(img);
-
-    if (isFile) {
-      // real image, with a placeholder fallback if the file is missing
-      imgEl.innerHTML =
-        `<img src="${escapeHtml(img)}" alt="" onerror="this.replaceWith(makePlaceholder())">`;
-    } else {
-      imgEl.innerHTML = "";
-      imgEl.appendChild(makePlaceholder());
-    }
 
     $("card-name").textContent = card.name || "";
     $("card-text").textContent = card.text || "";
+
+    // reset video/sound state for each new card
+    currentVideo = null;
+    $("sound-btn").classList.add("hidden");
+
+    if (card.draw) {
+      // special card: drawable canvas instead of an image
+      drawingMode = true;
+      $("card").classList.add("drawing");
+      $("card-actions").classList.remove("hidden");
+      imgEl.innerHTML = "";
+      buildCanvas(imgEl);
+    } else {
+      drawingMode = false;
+      $("card").classList.remove("drawing");
+      $("card-actions").classList.add("hidden");
+
+      const media = (card.image || "").trim();
+      const isVideo = /\.(mp4|webm|ogv|mov)$/i.test(media);
+      const isImage = /^(https?:\/\/|images\/|\.\/|\/)|\.(png|jpe?g|gif|webp|svg)$/i.test(media);
+      if (isVideo) {
+        // video card (e.g. .mp4), with a placeholder fallback if the file is missing
+        imgEl.innerHTML =
+          `<video src="${escapeHtml(media)}" autoplay playsinline onerror="this.replaceWith(makePlaceholder())"></video>`;
+        currentVideo = imgEl.querySelector("video");
+        if (currentVideo) {
+          // play with sound on the first run; after it finishes, mute and loop silently
+          currentVideo.muted = false;
+          currentVideo.play().catch(() => {
+            currentVideo.muted = true;          // sound blocked → fall back to muted
+            currentVideo.loop = true;
+            currentVideo.play().catch(() => {});
+            updateSoundIcon();
+          });
+          currentVideo.addEventListener("ended", () => {
+            currentVideo.muted = true;
+            currentVideo.loop = true;
+            currentVideo.currentTime = 0;
+            currentVideo.play().catch(() => {});
+            updateSoundIcon();
+          }, { once: true });
+        }
+        $("sound-btn").classList.remove("hidden");
+        updateSoundIcon();
+      } else if (isImage) {
+        // real image, with a placeholder fallback if the file is missing
+        imgEl.innerHTML =
+          `<img src="${escapeHtml(media)}" alt="" onerror="this.replaceWith(makePlaceholder())">`;
+      } else {
+        imgEl.innerHTML = "";
+        imgEl.appendChild(makePlaceholder());
+      }
+    }
 
     const c = $("card");
     c.classList.remove("flip");
     void c.offsetWidth;
     c.classList.add("flip");
+  }
+
+  // ---- Drawing canvas (Maalari card) ----
+  let dctx = null;   // current canvas 2D context
+
+  function buildCanvas(container) {
+    const canvas = document.createElement("canvas");
+    container.appendChild(canvas);
+    // match drawing resolution to the on-screen size
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#222";
+    dctx = ctx;
+
+    let drawing = false, lx = 0, ly = 0;
+    const pos = (e) => {
+      const r = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - r.left) * (canvas.width / r.width),
+        y: (e.clientY - r.top)  * (canvas.height / r.height)
+      };
+    };
+    canvas.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();                 // don't trigger card tap
+      drawing = true;
+      const p = pos(e); lx = p.x; ly = p.y;
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!drawing) return;
+      const p = pos(e);
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      lx = p.x; ly = p.y;
+    });
+    const stop = () => { drawing = false; };
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+    canvas.addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  function clearCanvas() {
+    if (!dctx) return;
+    dctx.fillStyle = "#fff";
+    dctx.fillRect(0, 0, dctx.canvas.width, dctx.canvas.height);
   }
 
   function makePlaceholder() {

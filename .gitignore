@@ -1,5 +1,10 @@
 # Not part of the game — keep out of the public repo
 CLAUDE.md
+.claude/
 kuva06.jpg
-*.mp4
 *.avif
+
+# Stray video clips not used by the game (card videos like kuka.mp4 ARE pushed)
+ec35043f3d630555.mp4
+90647246da4a3458.mp4
+clideo_editor_00df05a24c4c42ccaa93b21bce277729.mp4
