@@ -30,6 +30,8 @@ const CARDS = [
 
 { name: "Kuka näin on sanonut?", text: "Sano tunnettu lausahdus. Lausujan arvannut pelaaja ei juo. Muut juovat.", image: "kuka.mp4" },
 
+{ name: " ", text: "Sinä vs Niki jalkapallossa. Häviäjä juo kolme (3) huikkaa.", image: "niki.png" },
+
 { name: " ", text: "Anna vasemmalla puolellasi istuvalle pelaajalle yksi kulaus omaa juomaasi.", image: "imetän.jpg" },
 
 { name: "Tuplilla aloitat tytyilyn", text: " ", image: "tyty.mp4", postId: true },

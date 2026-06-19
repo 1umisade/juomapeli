@@ -436,6 +436,11 @@
       e.stopPropagation();                 // don't trigger card tap
       drawing = true;
       const p = pos(e); lx = p.x; ly = p.y;
+      // draw a dot so a single tap (no movement) still leaves a mark
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
       canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener("pointermove", (e) => {
