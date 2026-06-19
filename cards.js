@@ -67,7 +67,7 @@ const CARDS = [
 
 { name: "Employim", text: "Montako työpäivää teit tällä viikolla? Juo yhtä monta huikkaa.", image: "bää.jpg", copies: 1 },
 
-{ name: "Säätö-Sauli", text: "Arvioi vasemman pelaajan juoman paino kahden merkitsevän numeron tarkkudella. Jos arvaat oikein, hän juo (3) huikkaa.", image: "sauli.jpg", copies: 1 },
+{ name: "Säätö-Sauli", text: "Arvioi vasemman pelaajan juoman paino yhden merkitsevän numeron tarkkuudella. Jos arvaat oikein, hän juo (3) huikkaa.", image: "sauli.jpg", copies: 1 },
 
 { name: "Rankaisija", text: "Sinä juot yhden (1) kulauksen. Valitsemasi pelaaja juo viisi (5).", image: "rankaisija.png", copies: 1 },
 
