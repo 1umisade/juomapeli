@@ -7,14 +7,19 @@
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0; height: 100%;
+    margin: 0;
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
     background: #14121f;
     color: #fff;
-    overflow: hidden;
+    overflow-x: hidden;
     user-select: none;
   }
-  body { display: flex; align-items: center; justify-content: center; }
+
+  /* full-screen play area; scroll down for the gallery */
+  #play {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
 
   /* ---------- Card ---------- */
   #card {
@@ -104,7 +109,30 @@
     width: 100%;
     display: flex; align-items: center; justify-content: center;
     font-size: 4.8cqw; font-weight: 600; line-height: 1.3;
+    transition: opacity .5s ease;
   }
+  #card-text.text-hidden { opacity: 0; }   /* delayed-reveal cards */
+
+  /* imageboard-style post generator (postId cards) */
+  .postid-wrap { display: flex; flex-direction: column; align-items: center; gap: 3cqw; }
+  .postbtn {
+    border: none; border-radius: 3px;
+    background: #117743; color: #fff;
+    padding: 1.4cqw 4.5cqw; font-size: 3.4cqw; font-weight: 700;
+    cursor: pointer;
+  }
+  .postbtn:active { transform: scale(.96); }
+  .ib-post {
+    display: inline-flex; align-items: center; gap: 1.4cqw;
+    background: #e6e6e6; color: #000;
+    padding: 1cqw 2cqw; border-radius: 2px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 3.3cqw; line-height: 1.2; white-space: nowrap;
+  }
+  .ib-check { width: 3cqw; height: 3cqw; margin: 0; pointer-events: none; }
+  .ib-name { color: #117743; font-weight: 700; }
+  .ib-date { color: #555; }
+  .ib-no   { color: #34345c; font-weight: 700; }
   #card-text:empty { display: none; }
 
   /* drawing canvas (Maalari card) */
@@ -139,6 +167,39 @@
   #nextBtn  { background: #ffd24d; color: #1d1a2b; }
   .mini:active { transform: scale(.96); }
 
+  /* ---------- Gallery (scroll down) ---------- */
+  #gallery {
+    padding: 24px 16px 60px;
+    background: #1a1726;
+  }
+  .gallery-title {
+    text-align: center; font-size: 22px; font-weight: 800;
+    margin: 0 0 16px; color: #fff;
+  }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+    max-width: 760px; margin: 0 auto;
+  }
+  .gcell {
+    background: #2a2640; border-radius: 12px; overflow: hidden;
+    cursor: pointer; display: flex; flex-direction: column;
+    border: 2px solid transparent;
+  }
+  .gcell:active { transform: scale(.97); }
+  .gcell.selected { border-color: #ffd24d; }
+  .gthumb {
+    width: 100%; aspect-ratio: 1 / 1; background: #14121f;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .gthumb img, .gthumb video { width: 100%; height: 100%; object-fit: cover; }
+  .gthumb .gph { font-size: 34px; color: rgba(255,255,255,.4); }
+  .gname {
+    padding: 8px 6px; font-size: 13px; font-weight: 700;
+    text-align: center; line-height: 1.2;
+  }
+
   /* ---------- Start screen ---------- */
   #setup {
     position: fixed; inset: 0; z-index: 5;
@@ -162,30 +223,39 @@
   </div>
 
   <!-- The card -->
-  <div id="card">
-    <div id="card-count"></div>
-    <button id="sound-btn" class="hidden">🔇</button>
-    <div id="card-name">Napauta korttia</div>
-    <div id="card-img"></div>
-    <div id="card-text"></div>
-    <div id="card-actions" class="hidden">
-      <button id="clearBtn" class="mini">Tyhjennä</button>
-      <button id="nextBtn" class="mini">Seuraava kortti</button>
+  <div id="play">
+    <div id="card">
+      <div id="card-count"></div>
+      <button id="sound-btn" class="hidden">🔇</button>
+      <div id="card-name">Napauta korttia</div>
+      <div id="card-img"></div>
+      <div id="card-text"></div>
+      <div id="card-actions" class="hidden">
+        <button id="clearBtn" class="mini">Tyhjennä</button>
+        <button id="nextBtn" class="mini">Seuraava kortti</button>
+      </div>
     </div>
+  </div>
+
+  <!-- Scroll down: gallery of all cards (tap one to review it up top) -->
+  <div id="gallery">
+    <div class="gallery-title">Kaikki kortit</div>
+    <div id="grid"></div>
   </div>
 
 <script src="cards.js"></script>
 <script>
-  let lastCard = -1;
   let drawingMode = false;   // true while the Maalari (draw) card is showing
   let currentVideo = null;   // <video> on the current card, if any
-  const played = new Set();
+  let deck = [];             // shuffled deck holding 4 copies of each card
+  let pos = 0;               // how many cards have been drawn this pass
+  let textTimer = null;      // pending delayed-text reveal timer
 
   const $ = (id) => document.getElementById(id);
 
   $("startBtn").addEventListener("click", () => {
     $("setup").classList.add("hidden");
-    updateCount();
+    buildDeck();
     drawCard();
   });
 
@@ -218,31 +288,53 @@
     $("sound-btn").textContent = (currentVideo && !currentVideo.muted) ? "🔊" : "🔇";
   }
 
+  function buildDeck() {
+    deck = [];
+    for (let i = 0; i < CARDS.length; i++) {
+      const n = CARDS[i].copies || 1;   // per-card multiplier (default 1)
+      for (let c = 0; c < n; c++) deck.push(CARDS[i]);
+    }
+    // Fisher–Yates shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    pos = 0;
+  }
+
   function drawCard() {
     if (!CARDS || CARDS.length === 0) {
       $("card-text").textContent = "Lisää kortteja cards.js-tiedostoon";
       $("card-img").textContent = "📝";
       return;
     }
-    let i = Math.floor(Math.random() * CARDS.length);
-    if (CARDS.length > 1) {
-      while (i === lastCard) i = Math.floor(Math.random() * CARDS.length);
-    }
-    lastCard = i;
-    played.add(i);
-    showCard(CARDS[i]);
+    if (pos >= deck.length) buildDeck();   // deck used up → reshuffle and start over
+    const card = deck[pos];
+    pos++;                                 // card number always advances
+    showCard(card);
     updateCount();
   }
 
   function updateCount() {
-    $("card-count").textContent = played.size + "/" + (CARDS ? CARDS.length : 0);
+    $("card-count").textContent = pos + "/" + deck.length;
   }
 
   function showCard(card) {
     const imgEl = $("card-img");
+    stopGame();   // stop any running mini-game loop from the previous card
 
     $("card-name").textContent = card.name || "";
-    $("card-text").textContent = card.text || "";
+
+    // text: usually shown immediately, but some cards reveal it after a delay
+    const textEl = $("card-text");
+    clearTimeout(textTimer);
+    textEl.classList.remove("text-hidden");
+    textEl.textContent = card.text || "";
+    if (card.textDelay) {
+      textEl.classList.add("text-hidden");
+      textTimer = setTimeout(() => textEl.classList.remove("text-hidden"), card.textDelay);
+    }
+    if (card.postId) buildPostId(textEl, card.text || "");
 
     // reset video/sound state for each new card
     currentVideo = null;
@@ -252,12 +344,22 @@
       // special card: drawable canvas instead of an image
       drawingMode = true;
       $("card").classList.add("drawing");
+      $("clearBtn").classList.remove("hidden");
       $("card-actions").classList.remove("hidden");
       imgEl.innerHTML = "";
       buildCanvas(imgEl);
+    } else if (card.airhockey) {
+      // special card: 2-player air hockey mini-game
+      drawingMode = true;
+      $("card").classList.add("drawing");
+      $("clearBtn").classList.add("hidden");   // no clear button for the game
+      $("card-actions").classList.remove("hidden");
+      imgEl.innerHTML = "";
+      buildAirHockey(imgEl);
     } else {
       drawingMode = false;
       $("card").classList.remove("drawing");
+      $("clearBtn").classList.remove("hidden");
       $("card-actions").classList.add("hidden");
 
       const media = (card.image || "").trim();
@@ -357,6 +459,141 @@
     dctx.fillRect(0, 0, dctx.canvas.width, dctx.canvas.height);
   }
 
+  // ---- Air hockey mini-game (Ilmajääkiekko card) ----
+  let gameRAF = null;
+  function stopGame() {
+    if (gameRAF) cancelAnimationFrame(gameRAF);
+    gameRAF = null;
+  }
+
+  function buildAirHockey(container) {
+    const canvas = document.createElement("canvas");
+    container.appendChild(canvas);
+    const W = canvas.width = container.clientWidth;
+    const H = canvas.height = container.clientHeight;
+    const ctx = canvas.getContext("2d");
+
+    const pr = W * 0.10;                 // paddle radius
+    const br = W * 0.055;                // puck radius
+    const goalW = W * 0.42;
+    const gX0 = (W - goalW) / 2, gX1 = (W + goalW) / 2;
+    const WIN = 7;
+
+    const top = { x: W/2, y: H*0.12, px: W/2, py: H*0.12 };
+    const bot = { x: W/2, y: H*0.88, px: W/2, py: H*0.88 };
+    const puck = { x: W/2, y: H/2, vx: 0, vy: 0 };
+    let scoreTop = 0, scoreBot = 0, over = false;
+
+    const clamp = (v,a,b) => v<a?a:(v>b?b:v);
+    const inGoal = (x) => x > gX0 && x < gX1;
+
+    function resetPuck(dir) {
+      puck.x = W/2; puck.y = H/2;
+      const sp = H * 0.006;
+      const a = Math.random()*0.6 - 0.3;
+      puck.vx = Math.sin(a) * sp;
+      puck.vy = (dir || (Math.random()<0.5?1:-1)) * Math.cos(a) * sp;
+    }
+    resetPuck();
+
+    // input: one pointer per half
+    const ptr = new Map();
+    const at = (e) => {
+      const r = canvas.getBoundingClientRect();
+      return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) };
+    };
+    function place(which, p) {
+      const pad = which==='top' ? top : bot;
+      pad.x = clamp(p.x, pr, W-pr);
+      pad.y = which==='top' ? clamp(p.y, pr, H/2-pr) : clamp(p.y, H/2+pr, H-pr);
+    }
+    canvas.addEventListener("pointerdown",(e)=>{
+      e.stopPropagation();
+      const p = at(e);
+      const which = p.y < H/2 ? 'top' : 'bot';
+      if ([...ptr.values()].includes(which)) return;   // one finger per paddle
+      ptr.set(e.pointerId, which);
+      canvas.setPointerCapture(e.pointerId);
+      place(which, p);
+    });
+    canvas.addEventListener("pointermove",(e)=>{
+      const which = ptr.get(e.pointerId);
+      if (which) place(which, at(e));
+    });
+    const release = (e)=> ptr.delete(e.pointerId);
+    canvas.addEventListener("pointerup", release);
+    canvas.addEventListener("pointercancel", release);
+    canvas.addEventListener("click",(e)=>e.stopPropagation());
+
+    function hit(pad) {
+      const dx = puck.x - pad.x, dy = puck.y - pad.y;
+      const d = Math.hypot(dx, dy), min = br + pr;
+      if (d < min && d > 0) {
+        const nx = dx/d, ny = dy/d;
+        puck.x = pad.x + nx*min; puck.y = pad.y + ny*min;
+        const sp = Math.max(Math.hypot(puck.vx, puck.vy), H*0.008);
+        puck.vx = nx*sp + (pad.x - pad.px)*0.6;
+        puck.vy = ny*sp + (pad.y - pad.py)*0.6;
+      }
+    }
+    function scored() {
+      if (scoreTop >= WIN || scoreBot >= WIN) { over = true; puck.vx = puck.vy = 0; }
+      else resetPuck();
+    }
+
+    function step() {
+      if (!over) {
+        puck.x += puck.vx; puck.y += puck.vy;
+        if (puck.x - br < 0) { puck.x = br; puck.vx = Math.abs(puck.vx); }
+        if (puck.x + br > W) { puck.x = W-br; puck.vx = -Math.abs(puck.vx); }
+        if (puck.y - br < 0) {
+          if (inGoal(puck.x)) { scoreBot++; scored(); }
+          else { puck.y = br; puck.vy = Math.abs(puck.vy); }
+        }
+        if (puck.y + br > H) {
+          if (inGoal(puck.x)) { scoreTop++; scored(); }
+          else { puck.y = H-br; puck.vy = -Math.abs(puck.vy); }
+        }
+        hit(top); hit(bot);
+        const maxv = H*0.022, sv = Math.hypot(puck.vx, puck.vy);
+        if (sv > maxv) { puck.vx *= maxv/sv; puck.vy *= maxv/sv; }
+      }
+      top.px = top.x; top.py = top.y; bot.px = bot.x; bot.py = bot.y;
+      draw();
+      gameRAF = requestAnimationFrame(step);
+    }
+
+    function disc(x,y,r,c){ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+    function draw() {
+      ctx.fillStyle = "#0d3b66"; ctx.fillRect(0,0,W,H);
+      ctx.strokeStyle = "rgba(255,255,255,.45)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(W/2,H/2,W*0.14,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = "#ffd24d"; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(gX0,3); ctx.lineTo(gX1,3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gX0,H-3); ctx.lineTo(gX1,H-3); ctx.stroke();
+      // scores (top one rotated for the player across the table)
+      ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.font = "bold " + (W*0.13) + "px sans-serif";
+      ctx.save(); ctx.translate(W*0.80, H*0.28); ctx.rotate(Math.PI); ctx.fillText(String(scoreTop),0,0); ctx.restore();
+      ctx.fillText(String(scoreBot), W*0.80, H*0.72);
+      disc(top.x, top.y, pr, "#ff5d73");
+      disc(bot.x, bot.y, pr, "#54d784");
+      disc(puck.x, puck.y, br, "#fff");
+      if (over) {
+        ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = "#fff"; ctx.textAlign="center";
+        ctx.font = "bold " + (W*0.12) + "px sans-serif";
+        ctx.fillText("Häviäjä juo!", W/2, H/2 - W*0.05);
+        ctx.font = "bold " + (W*0.075) + "px sans-serif";
+        ctx.fillText((scoreTop > scoreBot ? "Yläpää" : "Alapää") + " voitti", W/2, H/2 + W*0.06);
+      }
+    }
+
+    stopGame();
+    step();
+  }
+
   function makePlaceholder() {
     const d = document.createElement("div");
     d.className = "placeholder";
@@ -364,10 +601,96 @@
     return d;
   }
 
+  // ---- imageboard post-header generator (postId cards) ----
+  function buildPostId(textEl, text) {
+    textEl.textContent = "";
+    const wrap = document.createElement("div");
+    wrap.className = "postid-wrap";
+    if (text) wrap.appendChild(document.createTextNode(text));
+    const btn = document.createElement("button");
+    btn.className = "postbtn";
+    btn.textContent = "gettaa";
+    const out = document.createElement("div");
+    out.className = "post-out";
+    btn.addEventListener("click", (e) => { e.stopPropagation(); out.innerHTML = makePost(); });
+    wrap.appendChild(btn);
+    wrap.appendChild(out);
+    textEl.appendChild(wrap);
+  }
+
+  // hardcoded post numbers, cycled: starts non-dubs, every 2nd ends in dubs
+  let postIdx = 0;
+  const POST_NUMS = ["2351843", "2353277", "2308612", "2309800"];
+
+  // build an imageboard-style header: "Anonyymi DD.MM.YY HH:MM:SS No.NNNNNNN"
+  function makePost() {
+    const num = POST_NUMS[postIdx % POST_NUMS.length];
+    postIdx++;
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    const date = `${p(d.getDate())}.${p(d.getMonth() + 1)}.${String(d.getFullYear()).slice(-2)}`;
+    const time = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    return `<span class="ib-post">`
+      + `<input type="checkbox" class="ib-check">`
+      + `<span class="ib-name">Anonyymi</span> `
+      + `<span class="ib-date">${date} ${time}</span> `
+      + `<span class="ib-no">No.${num}</span>`
+      + `</span>`;
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, m =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
   }
+
+  // ---- Gallery of all cards (scroll down to browse / review) ----
+  function buildGallery() {
+    const grid = $("grid");
+    grid.innerHTML = "";
+    CARDS.forEach((card, i) => {
+      const cell = document.createElement("div");
+      cell.className = "gcell";
+
+      const thumb = document.createElement("div");
+      thumb.className = "gthumb";
+      const media = (card.image || "").trim();
+      if (/\.(mp4|webm|ogv|mov)$/i.test(media)) {
+        const v = document.createElement("video");
+        v.src = media; v.muted = true; v.preload = "metadata"; v.playsInline = true;
+        thumb.appendChild(v);
+      } else if (media) {
+        const img = document.createElement("img");
+        img.alt = "";
+        img.onerror = () => { thumb.innerHTML = '<span class="gph">🖼️</span>'; };
+        img.src = media;
+        thumb.appendChild(img);
+      } else {
+        const span = document.createElement("span");
+        span.className = "gph";
+        span.textContent = card.draw ? "✏️" : "🖼️";
+        thumb.appendChild(span);
+      }
+
+      const name = document.createElement("div");
+      name.className = "gname";
+      const nm = (card.name || "").trim();
+      name.textContent = nm || (card.text || "").trim().slice(0, 24) || "—";
+
+      cell.appendChild(thumb);
+      cell.appendChild(name);
+      cell.addEventListener("click", () => reviewCard(i));
+      grid.appendChild(cell);
+    });
+  }
+
+  function reviewCard(i) {
+    const cells = $("grid").children;
+    for (let k = 0; k < cells.length; k++) cells[k].classList.toggle("selected", k === i);
+    showCard(CARDS[i]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  buildGallery();
 </script>
 </body>
 </html>
