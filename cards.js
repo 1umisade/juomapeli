@@ -50,15 +50,20 @@ const CARDS = [
 
 { name: "Huhhuh pitkä teksti", text: "Lue yksi lause kirjasta sönköttämättä tai juo kolme (3) huikkaa.", image: "kirja.png", copies: 1 },
 
-{ name: "Sääntö", text: " ", image: "", copies: 1 },
+{ name: "", text: " ", image: "1.png", copies: 1, first: true },
 
-{ name: "kategoria", text: " ", image: "", copies: 1 },
+{ name: "", text: " ", image: "2.png", copies: 1, first: true },
 
-{ name: "riimi", text: " ", image: "", copies: 1 },
+{ name: "", text: " ", image: "3.png", copies: 1, first: true },
 
-{ name: "kysymysmestari", text: " ", image: "", copies: 1 },
+{ name: "", text: " ", image: "4.png", copies: 1, first: true },
 
-{ name: "tarina", text: " ", image: "", copies: 1 },
+{ name: "", text: " ", image: "5.png", copies: 1, first: true },
+
+{ name: "", text: " ", image: "6.png", copies: 1, first: true },
+
+{ name: "", text: " ", image: "7.png", copies: 1, first: true },
+
 
 { name: "Employim", text: "Montako työpäivää teit tällä viikolla? Juo yhtä monta huikkaa.", image: "bää.jpg", copies: 1 },
 

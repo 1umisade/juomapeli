@@ -289,16 +289,20 @@
   }
 
   function buildDeck() {
-    deck = [];
+    const firsts = [];   // intro cards (first:true), kept in order at the front
+    const rest = [];     // everything else, shuffled
     for (let i = 0; i < CARDS.length; i++) {
-      const n = CARDS[i].copies || 1;   // per-card multiplier (default 1)
-      for (let c = 0; c < n; c++) deck.push(CARDS[i]);
+      const card = CARDS[i];
+      const n = card.copies || 1;       // per-card multiplier (default 1)
+      const target = card.first ? firsts : rest;
+      for (let c = 0; c < n; c++) target.push(card);
     }
-    // Fisher–Yates shuffle
-    for (let i = deck.length - 1; i > 0; i--) {
+    // Fisher–Yates shuffle the non-intro cards
+    for (let i = rest.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
+      [rest[i], rest[j]] = [rest[j], rest[i]];
     }
+    deck = firsts.concat(rest);
     pos = 0;
   }
 
