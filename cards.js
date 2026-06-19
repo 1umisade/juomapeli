@@ -84,5 +84,5 @@ const CARDS = [
 
 
   // Special card: draw:true replaces the image with a canvas the player draws on.
-  { name: "Maalari", text: "Piirrä jokin esine tästä huoneesta. Ensimmäisenä oikein arvannut pelaaja ei juo. Muut juovat.", draw: true },
+  { name: "Itävaltalainen maalari", text: "Piirrä jokin esine tästä huoneesta. Ensimmäisenä oikein arvannut pelaaja ei juo. Muut juovat.", draw: true },
 ];
